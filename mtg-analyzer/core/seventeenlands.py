@@ -4,12 +4,12 @@ import os
 import sys
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Iterable, Optional, Tuple
 
 import requests
 
-RATINGS_URL = "https://www.17lands.com/card_ratings/data"
+RATINGS_URL = "https://www.17lands.com/api/card_data"
 USER_AGENT = "mtg-analyzer/0.1"
 CACHE_TTL = timedelta(hours=24)
 BETWEEN_SET_SLEEP_SECONDS = 1
@@ -84,20 +84,16 @@ def fetch_set_ratings(
     try:
         resp = requests.get(
             RATINGS_URL,
-            params={
-                "expansion": set_code,
-                "format": format,
-                "start_date": "2019-01-01",
-                "end_date": date.today().isoformat(),
-            },
+            params={"expansion": set_code, "event_type": format},
             headers={"User-Agent": USER_AGENT, "Accept": "application/json"},
             timeout=30,
         )
         resp.raise_for_status()
-        data = resp.json()
+        payload = json.loads(resp.text)
+        data = payload.get("data", [])
         if not isinstance(data, list):
             data = []
-    except (requests.RequestException, ValueError) as exc:
+    except (requests.RequestException, ValueError, json.JSONDecodeError) as exc:
         print(f"warning: 17Lands request failed for {set_code}/{format}: {exc}", file=sys.stderr)
         return {}, False
 
