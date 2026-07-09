@@ -1,0 +1,6 @@
+mtg-analyzer/.venv/
+mtg-analyzer/cache/
+__pycache__/
+*.pyc
+*.csv
+not_found.txt
