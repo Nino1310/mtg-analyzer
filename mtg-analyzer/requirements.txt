@@ -1,4 +1,7 @@
 requests>=2.31,<3
 pandas>=2.0,<2.4
 streamlit>=1.28,<2
-matplotlib>=3.7,<4
+streamlit-aggrid==1.0.5
+python-decouple>=3.6,<4.0
+bokeh==2.4.3
+numpy<2

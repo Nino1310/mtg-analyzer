@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 *.csv
 not_found.txt
+mtg-analyzer/decklist.txt

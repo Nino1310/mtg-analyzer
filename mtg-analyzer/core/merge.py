@@ -62,3 +62,18 @@ def build_dataframe(
         })
 
     return pd.DataFrame(rows, columns=COLUMNS)
+
+
+def explode_copies(df: pd.DataFrame) -> pd.DataFrame:
+    """One row per copy: repeat each row `count` times, drop `count`, add a uid column."""
+    if df.empty:
+        out = df.drop(columns=["count"], errors="ignore").copy()
+        out.insert(0, "uid", pd.Series([], dtype=int))
+        return out
+    out = (
+        df.loc[df.index.repeat(df["count"].astype(int))]
+        .drop(columns=["count"])
+        .reset_index(drop=True)
+    )
+    out.insert(0, "uid", range(len(out)))
+    return out
