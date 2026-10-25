@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 HEADER_RE = re.compile(
-    r'^(deck|sideboard|commander|companion|maybeboard)\s*:?\s*$', re.IGNORECASE
+    r'^(deck|sideboard|commander|companion|maybeboard|mazzo|comandante|compagno)\s*:?\s*$',
+    re.IGNORECASE,
 )
 ARENA_RE = re.compile(
     r'^(?P<count>\d+)\s+(?P<name>.+?)\s+\((?P<set>[A-Za-z0-9]{2,5})\)\s+(?P<cn>\S+)\s*.*$'

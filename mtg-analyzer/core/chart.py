@@ -19,6 +19,21 @@ PALETTE = {
     "Colorless": "#8C8C8C",
 }
 
+# Table row backgrounds: one per mono-color, plus a shared multicolor tint.
+COLOR_BG = {
+    "W": "#fdf6c9", "U": "#cfe8fb", "B": "#d8d8d8",
+    "R": "#fbd2c9", "G": "#d3f0c9", "C": "#f0f0f0",
+}
+MULTICOLOR_BG = "#f0d97a"
+
+# RdYlGn sampled at 11 stops, as (fraction, [r,g,b]); drives the GIH WR heatmap.
+GRADIENT_STOPS = [
+    [0.0, [165, 0, 38]], [0.1, [214, 47, 39]], [0.2, [244, 109, 67]],
+    [0.3, [253, 173, 96]], [0.4, [254, 224, 139]], [0.5, [254, 255, 190]],
+    [0.6, [217, 239, 139]], [0.7, [165, 216, 106]], [0.8, [102, 189, 99]],
+    [0.9, [25, 151, 80]], [1.0, [0, 104, 55]],
+]
+
 ROW_CAP = 5
 MAX_ROWS = 3
 BIN_CAP = ROW_CAP * MAX_ROWS

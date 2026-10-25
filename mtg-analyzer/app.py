@@ -1,37 +1,26 @@
 """Streamlit app: paste/upload a decklist, view an enriched, color-coded, filterable table."""
-import html
 import json
 
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 from st_aggrid import AgGrid, DataReturnMode, GridOptionsBuilder, GridUpdateMode, JsCode
 
+from core.arena import ARENA_STYLE, build_arena
 from core.chart import (
-    CMC_BUCKETS,
+    COLOR_BG,
     COLOR_GROUP_ORDER,
-    _cmc_bucket,
+    GRADIENT_STOPS,
+    MULTICOLOR_BG,
     _color_group,
     build_winrate_dot_chart,
     compute_weighted_averages,
 )
+from core.export import build_report_html
 from core.merge import build_dataframe, explode_copies
 from core.parser import parse_decklist
 from core.scryfall import fetch_cards
 from core.seventeenlands import get_ratings_for_sets
-
-COLOR_BG = {
-    "W": "#fdf6c9", "U": "#cfe8fb", "B": "#d8d8d8",
-    "R": "#fbd2c9", "G": "#d3f0c9", "C": "#f0f0f0",
-}
-MULTICOLOR_BG = "#f0d97a"
-
-# RdYlGn sampled at 11 stops, as (fraction, [r,g,b])
-GRADIENT_STOPS = [
-    [0.0, [165, 0, 38]], [0.1, [214, 47, 39]], [0.2, [244, 109, 67]],
-    [0.3, [253, 173, 96]], [0.4, [254, 224, 139]], [0.5, [254, 255, 190]],
-    [0.6, [217, 239, 139]], [0.7, [165, 216, 106]], [0.8, [102, 189, 99]],
-    [0.9, [25, 151, 80]], [1.0, [0, 104, 55]],
-]
 
 st.set_page_config(page_title="MTG Card List Analyzer", layout="wide")
 
@@ -50,10 +39,6 @@ def _set_not_played(uid: int, value: bool):
     else:
         npset.discard(uid)
     _bump_version()
-
-
-def _is_creature(type_line) -> bool:
-    return "Creature" in str(type_line).split("//")[0]
 
 
 @st.cache_data(ttl=3600, show_spinner="Fetching card data...")
@@ -165,48 +150,10 @@ def build_grid_options(df: pd.DataFrame) -> dict:
     return gb.build()
 
 
-ARENA_CSS = """
-<style>
-.mtgthumb{line-height:0;}
-.mtgthumb-img{width:100%;display:block;border-radius:3px;margin:1px 0;
-    transition:transform .05s;}
-.mtgthumb:hover .mtgthumb-img{position:fixed;top:8%;left:38%;width:320px;height:auto;
-    z-index:9999;box-shadow:0 0 14px rgba(0,0,0,.55);border-radius:8px;}
-</style>
-"""
-
-
-def _render_arena_card(row, images_by_name):
-    uid = int(row["uid"])
-    name = row["name"]
-    url = images_by_name.get(name)
-    if url:
-        safe = html.escape(url, quote=True)
-        alt = html.escape(str(name), quote=True)
-        st.markdown(
-            f'<div class="mtgthumb"><img class="mtgthumb-img" src="{safe}" alt="{alt}"></div>',
-            unsafe_allow_html=True,
-        )
-    else:
-        st.caption(name)
-    if st.button("✕", key=f"np_{uid}", help=f"Not played: {name}"):
-        _set_not_played(uid, True)
-        st.rerun()
-
-
-def _render_region(region_df, buckets, images_by_name):
-    cols = st.columns(len(buckets))
-    for col, bucket in zip(cols, buckets):
-        with col:
-            st.markdown(f"<div style='text-align:center;font-weight:600'>{bucket}</div>",
-                        unsafe_allow_html=True)
-            for _, row in region_df[region_df["cmc_bucket"] == bucket].iterrows():
-                _render_arena_card(row, images_by_name)
-
-
 def render_arena(working, filtered, visible_groups, images_by_name, all_uids):
     st.subheader("Deck view")
-    st.markdown(ARENA_CSS, unsafe_allow_html=True)
+    st.caption("Hover a card to see it full-size. Toggle Not Played via the **Played** "
+               "checkbox in the table above, or the list below.")
 
     b1, b2, _ = st.columns([1, 1, 4])
     if b1.button("Mark all played"):
@@ -218,21 +165,10 @@ def render_arena(working, filtered, visible_groups, images_by_name, all_uids):
         _bump_version()
         st.rerun()
 
-    w = working.copy()
-    if not w.empty:
-        w["color_group"] = w["colors"].map(_color_group)
-        w = w[w["color_group"].isin(visible_groups)]
-        w["cmc_bucket"] = w["cmc"].map(_cmc_bucket)
-        w = w[w["cmc_bucket"].notna()]
-
-    buckets = [b for b in CMC_BUCKETS if not w.empty and (w["cmc_bucket"] == b).any()]
-    if buckets:
-        is_cr = w["type_line"].map(_is_creature)
-        st.markdown("#### Creatures")
-        _render_region(w[is_cr], buckets, images_by_name)
-        st.divider()
-        st.markdown("#### Non-creatures")
-        _render_region(w[~is_cr], buckets, images_by_name)
+    body, content_h = build_arena(working, visible_groups, images_by_name)
+    if body:
+        iframe_h = min(max(content_h, 260), 900)
+        components.html(ARENA_STYLE + body, height=iframe_h, scrolling=True)
     else:
         st.info("No played cards in the selected colors.")
 
@@ -341,6 +277,32 @@ if df is not None:
             st.info("No win-rate data available for the current selection.")
 
         render_arena(working, filtered, visible_groups, images_by_name, all_uids)
+
+        st.subheader("Share")
+        st.caption("Builds a standalone HTML file of the current view — table, chart and "
+                   "deck view. Anyone can open it in a browser; card images and the chart "
+                   "library load from the internet. Rebuild after changing filters.")
+        if st.button("Build HTML report"):
+            # A fresh figure: the one above already belongs to Streamlit's Bokeh document.
+            st.session_state["report_html"] = build_report_html(
+                filtered=filtered,
+                working=working,
+                averages=averages,
+                visible_groups=visible_groups,
+                images_by_name=images_by_name,
+                chart=build_winrate_dot_chart(working, visible_groups, images_by_name),
+                meta={
+                    "Format": format_choice,
+                    "Set": set_override.strip().upper() or "as printed",
+                },
+            )
+        if st.session_state.get("report_html"):
+            st.download_button(
+                "Download HTML report",
+                data=st.session_state["report_html"].encode("utf-8"),
+                file_name="mtg_report.html",
+                mime="text/html",
+            )
 
     st.download_button(
         "Download CSV",
